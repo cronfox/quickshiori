@@ -4,8 +4,8 @@
 
 [submodule "3rd/qjs-sqlite3"]
 	path = 3rd/qjs-sqlite3
-	url = https://github.com/ratboy666/qjs-sqlite3.git
+	url = https://github.com/cronfox/qjs-ng-sqlite3.git
 	
 [submodule "3rd/sqlite3-amalgamation"]
 	path = 3rd/sqlite3-amalgamation
-	url = https://github.com/azadkuh/sqlite-amalgamation.git
+	url = https://github.com/sjinks/sqlite3-cmake.git

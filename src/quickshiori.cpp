@@ -614,12 +614,12 @@ extern "C" __declspec(dllexport) HGLOBAL __cdecl request(HGLOBAL h, long* len) {
 
     std::string req(reinterpret_cast<char*>(h), *len);
     GlobalFree(h);
-    js_std_loop_once(g_ctx); // Process pending jobs before handling the request
     auto [ok, resp] = call_global("__shiori_request", req.c_str());
     if (!ok) {
         log_error("__shiori_request threw: " + resp);
         return to_hglobal(make_500(resp), len);
     }
+    js_std_loop_once(g_ctx); // Process pending jobs before handling the request
     if (resp.empty()) return nullptr;
     return to_hglobal(resp, len);
 }
