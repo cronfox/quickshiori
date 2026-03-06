@@ -3,9 +3,9 @@
 	url = https://github.com/quickjs-ng/quickjs.git
 
 [submodule "3rd/qjs-sqlite3"]
-	path = 3rd/qjs-sqlite3
+	path = 3rd/qjs-ng-sqlite3
 	url = https://github.com/cronfox/qjs-ng-sqlite3.git
 	
 [submodule "3rd/sqlite3-amalgamation"]
-	path = 3rd/sqlite3-amalgamation
+	path = 3rd/sqlite3-cmake
 	url = https://github.com/sjinks/sqlite3-cmake.git
