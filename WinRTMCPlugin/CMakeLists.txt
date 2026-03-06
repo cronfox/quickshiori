@@ -83,7 +83,9 @@ target_link_libraries(winrtmc_plugin PRIVATE
     qjs               # QuickJS-NG コア静的ライブラリ
     runtimeobject.lib # WinRT 基礎ランタイム（CoInitializeEx 等）
 )
-
+target_compile_definitions(winrtmc_plugin PRIVATE
+    # BUILD_SHARED_LIBS=OFF
+)
 # ── ⑥ コンパイラオプション ────────────────────────────────────────────────────
 if(MSVC)
     target_compile_options(winrtmc_plugin PRIVATE
@@ -92,6 +94,7 @@ if(MSVC)
         /W3
     )
     target_compile_definitions(winrtmc_plugin PRIVATE
+        QUICKJS_NG_BUILD
         WIN32_LEAN_AND_MEAN
         WINRT_LEAN_AND_MEAN
         NOMINMAX

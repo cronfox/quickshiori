@@ -470,6 +470,7 @@ static bool do_init(std::string dir_utf8) {
     // index.js should expose the three hook functions via globalThis.
     std::string src;
     std::string entry = g_dir + "/index.js";
+    
     log_info("Loading entry point: " + entry);
     if (!read_file(entry, src)) {
         log_error("Cannot open entry point: " + entry);
@@ -478,6 +479,7 @@ static bool do_init(std::string dir_utf8) {
         JS_FreeRuntime(g_rt);  g_rt  = nullptr;
         return false;
     }
+
     log_debug("Entry point loaded, size=" + std::to_string(src.size()));
     // Set __shiori_dir in globalThis before executing index.js.
     // JS_SetPropertyStr steals the reference to the value — do NOT JS_FreeValue it.
@@ -488,6 +490,11 @@ static bool do_init(std::string dir_utf8) {
                           JS_PROP_ENUMERABLE | JS_PROP_HAS_VALUE);
         JS_FreeValue(g_ctx, global);
     }
+
+    js_init_module_std(g_ctx, "qjs:std");
+    log_debug("\"std\" module registered");
+    js_init_module_os(g_ctx, "qjs:os");
+    log_debug("\"os\" module registered");
 
     // Register built-in "quickshiori" ES module.
     js_init_module_quickshiori(g_ctx, "quickshiori");

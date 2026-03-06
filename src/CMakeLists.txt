@@ -9,13 +9,14 @@ target_include_directories(quickshiori PRIVATE
     ${CMAKE_BINARY_DIR}/src   # generated version.h
 )
 
-target_link_libraries(quickshiori PUBLIC
+target_link_libraries(quickshiori PRIVATE
     qjs-libc   # std / os 等内置模块实现（必须在 qjs 前）
     qjs        # quickjs-ng 核心静态库
 )
 
 # Windows DLL 需要导出符号
 target_compile_definitions(quickshiori PRIVATE
+    QUICKJS_NG_BUILD
     WIN32_LEAN_AND_MEAN
 )
 # MSVC 需要 /utf-8 防止中文注释报 C4819

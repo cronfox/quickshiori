@@ -37,6 +37,7 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include <functional>
 #include <chrono>
 #include <cstdint>
@@ -103,6 +104,10 @@ struct MediaSessionData {
     // 同步标志
     std::atomic<bool> session_ready{ false };
     std::atomic<bool> destroyed{ false };
+
+    std::mutex bg_task_mutex;
+    std::condition_variable bg_task_cv;
+    uint32_t bg_task_count{ 0 };
     
     // 变更通知
     std::atomic<bool> metadata_changed{ false };
@@ -133,17 +138,52 @@ struct MediaSessionData {
     }
 };
 
-static void RunOnWinRTThread(std::function<void()> fn) {
-    std::thread([fn = std::move(fn)]() mutable {
+static bool TryBeginBackgroundTask(MediaSessionData* data) {
+    std::lock_guard<std::mutex> lock(data->bg_task_mutex);
+    if (data->destroyed.load(std::memory_order_acquire)) {
+        return false;
+    }
+    ++data->bg_task_count;
+    return true;
+}
+
+static void EndBackgroundTask(MediaSessionData* data) {
+    {
+        std::lock_guard<std::mutex> lock(data->bg_task_mutex);
+        if (data->bg_task_count > 0) {
+            --data->bg_task_count;
+        }
+    }
+    data->bg_task_cv.notify_all();
+}
+
+static void WaitForBackgroundTasks(MediaSessionData* data) {
+    std::unique_lock<std::mutex> lock(data->bg_task_mutex);
+    data->bg_task_cv.wait(lock, [data]() {
+        return data->bg_task_count == 0;
+    });
+}
+
+static bool RunOnWinRTThread(MediaSessionData* data, std::function<void()> fn) {
+    if (!TryBeginBackgroundTask(data)) {
+        return false;
+    }
+
+    std::thread([data, fn = std::move(fn)]() mutable {
         try {
             winrt::init_apartment(apartment_type::multi_threaded);
         } catch (...) {
         }
         try {
-            fn();
+            if (!data->destroyed.load(std::memory_order_acquire)) {
+                fn();
+            }
         } catch (...) {
         }
+        EndBackgroundTask(data);
     }).detach();
+
+    return true;
 }
 
 static GlobalSystemMediaTransportControlsSession GetSessionSnapshot(MediaSessionData* data) {
@@ -388,9 +428,11 @@ static JSValue js_media_session_control_target_common(JSContext* ctx, JSValueCon
         return JS_FALSE;
     }
 
-    RunOnWinRTThread([target, call = std::move(call)]() mutable {
+    if (!RunOnWinRTThread(data, [target, call = std::move(call)]() mutable {
         call(target);
-    });
+    })) {
+        return JS_FALSE;
+    }
     return JS_TRUE;
 }
 
@@ -558,7 +600,7 @@ static void RegisterMediaEvents(MediaSessionData* data) {
         [data](auto const&, auto const&) {
             if (data->destroyed.load(std::memory_order_acquire)) return;
             data->metadata_changed.store(true, std::memory_order_release);
-            RunOnWinRTThread([data]() {
+            RunOnWinRTThread(data, [data]() {
                 RefreshAllCaches(data);
             });
         }
@@ -568,7 +610,7 @@ static void RegisterMediaEvents(MediaSessionData* data) {
         [data](auto const&, auto const&) {
             if (data->destroyed.load(std::memory_order_acquire)) return;
             data->metadata_changed.store(true, std::memory_order_release);
-            RunOnWinRTThread([data]() {
+            RunOnWinRTThread(data, [data]() {
                 RefreshAllCaches(data);
             });
         }
@@ -578,7 +620,7 @@ static void RegisterMediaEvents(MediaSessionData* data) {
         [data](auto const&, auto const&) {
             if (data->destroyed.load(std::memory_order_acquire)) return;
             data->metadata_changed.store(true, std::memory_order_release);
-            RunOnWinRTThread([data]() {
+            RunOnWinRTThread(data, [data]() {
                 RefreshAllCaches(data);
             });
         }
@@ -601,6 +643,8 @@ static void js_media_session_finalizer(JSRuntime* rt, JSValue val) {
     if (data) {
         // 标记已销毁，阻止后台线程继续访问
         data->destroyed.store(true, std::memory_order_release);
+        // 等待已投递后台任务退出，避免 delete 后悬空访问
+        WaitForBackgroundTasks(data);
         // 释放回调（在 finalizer 中安全释放）
         if (!JS_IsUndefined(data->on_changed_callback)) {
             JS_FreeValueRT(rt, data->on_changed_callback);
@@ -621,7 +665,7 @@ static JSValue js_media_session_ctor(JSContext* ctx, JSValueConst new_target, in
     JS_SetOpaque(obj, data);
     
     // 在后台线程初始化 WinRT（避免 STA 线程问题）
-    RunOnWinRTThread([data]() {
+    RunOnWinRTThread(data, [data]() {
         try {
             if (data->destroyed.load(std::memory_order_acquire)) return;
             auto manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().get();
@@ -878,9 +922,11 @@ static JSValue js_media_session_control_common(JSContext* ctx, JSValueConst this
     auto session = GetSessionSnapshot(data);
     if (!session) return JS_FALSE;
 
-    RunOnWinRTThread([session, call = std::move(call)]() mutable {
+    if (!RunOnWinRTThread(data, [session, call = std::move(call)]() mutable {
         call(session);
-    });
+    })) {
+        return JS_FALSE;
+    }
     return JS_TRUE;
 }
 
@@ -1134,9 +1180,11 @@ static JSValue js_media_session_refresh(JSContext* ctx, JSValueConst this_val, i
     if (!data) return JS_EXCEPTION;
     
     if (data->session_ready.load(std::memory_order_acquire) && GetSessionSnapshot(data)) {
-        RunOnWinRTThread([data]() {
+        if (!RunOnWinRTThread(data, [data]() {
             RefreshAllCaches(data);
-        });
+        })) {
+            return JS_FALSE;
+        }
         return JS_TRUE;
     }
     return JS_FALSE;

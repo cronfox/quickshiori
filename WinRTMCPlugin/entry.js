@@ -170,6 +170,5 @@ globalThis.__shiori_request = function (rawRequest) {
 
 globalThis.__shiori_unload = function () {
     info("WinRTMCPlugin unloaded.");
-    media = null;
 };
 
