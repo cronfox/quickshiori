@@ -60,3 +60,7 @@ bool isUkagakaRunning(){
     if (hmutexSakura) CloseHandle(hmutexSakura);
     return true;
 }
+
+/*
+WIP!
+*/
