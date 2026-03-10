@@ -62,6 +62,10 @@
 #include "quickjs.h"
 #include "version.h"
 
+#ifndef QUICKSHIORI_COMMIT_ID
+#define QUICKSHIORI_COMMIT_ID "unknown"
+#endif
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -174,15 +178,18 @@ static int js_quickshiori_module_init(JSContext* ctx, JSModuleDef* m) {
     // process.version  : string  e.g. "0.0.1"
     // process.versions : { quickshiori, "quickjs-ng" }
     JSValue versions = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, versions, "quickshiori",
-                      JS_NewString(ctx, QUICKSHIORI_VERSION));
-    JS_SetPropertyStr(ctx, versions, "quickjs-ng",
-                      JS_NewString(ctx, JS_GetVersion()));
-
+    JS_DefinePropertyValueStr(ctx, versions, "quickshiori",
+                              JS_NewString(ctx, QUICKSHIORI_VERSION),
+                              JS_PROP_ENUMERABLE);
+    JS_DefinePropertyValueStr(ctx, versions, "quickjs-ng",
+                              JS_NewString(ctx, JS_GetVersion()),
+                              JS_PROP_ENUMERABLE);
     JSValue process = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, process, "version",
-                      JS_NewString(ctx, QUICKSHIORI_VERSION));
-    JS_SetPropertyStr(ctx, process, "versions", versions);
+    JS_DefinePropertyValueStr(ctx, process, "version",
+                              JS_NewString(ctx, QUICKSHIORI_VERSION),
+                              JS_PROP_ENUMERABLE);
+    JS_DefinePropertyValueStr(ctx, process, "versions", versions,
+                              JS_PROP_ENUMERABLE);
 
     if (JS_SetModuleExport(ctx, m, "process", process) != 0)
         return -1;
