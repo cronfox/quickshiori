@@ -59,6 +59,7 @@ struct UkaDllData {
     UKADLL_REQUEST pRequest = nullptr;
     std::string dllPath;
     bool isLoaded = false;
+    bool isUtf8 = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -77,7 +78,11 @@ static HGLOBAL string_to_hglobal(const std::string& s, long* out_len) {
     return h;
 }
 
-static std::string utf8_to_oemcp(const std::string& utf8) {
+static std::string utf8_to_oemcp(const std::string& utf8) {\
+
+    if(AreFileApisANSI()){
+        
+    }
     if (utf8.empty()) return {};
     int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
     std::wstring wide(wlen, L'\0');
@@ -188,6 +193,7 @@ static JSValue js_ukadll_load(JSContext *ctx, JSValueConst this_val, int argc, J
         if (!h) return JS_ThrowOutOfMemory(ctx);
         if (data->pLoadU(h, len)) {
             data->isLoaded = true;
+            data->isUtf8 = true;
             return JS_TRUE;
         }
         return JS_FALSE;
