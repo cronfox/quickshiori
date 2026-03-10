@@ -28,3 +28,20 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickshiori-windows-i386
+          if-no-files-found: error
+          path: |
+            build/dist/qjs.exe
+            build/dist/qjs.dll
+            build/dist/quickshiori.dll
+            build/dist/quickshiori.pdb
+            build/dist/quickjs_sqlite3.dll
+            build/dist/quickjs_sqlite3.pdb
+            build/dist/ukadll.dll
+            build/dist/ukadll.pdb
+            build/dist/winrtmc.dll
+            build/dist/winrtmc.pdb
