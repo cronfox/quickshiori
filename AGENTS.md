@@ -1,208 +1,154 @@
-# AGENTS.md - QuickShiori Development Guide
+# AGENTS.md — QuickShiori Development Guide
 
 ## Project Overview
 
-QuickShiori is a C++ CMake project that embeds QuickJS-NG to provide JavaScript runtime support for the Ukagaka platform. It builds Windows DLLs implementing SHIORI/SAORI protocols.
+QuickShiori embeds QuickJS-NG to provide a JavaScript runtime for the [Ukagaka](https://ssp.shillest.net/ukadoc/manual/spec_dll.html) platform. It builds Windows x86 DLLs implementing SHIORI/SAORI/PLUGIN/HEADLINE protocols. Ghost authors write `index.js`; the runtime bridges JS ↔ base ware (SSP, Materia, CROW).
 
 ## Build Commands
 
 ### Prerequisites
-- Windows with MSVC (x86 architecture required)
-- CMake 3.20+
-- Ninja build system
-- Git submodules (recursive clone required)
+- Windows with MSVC (x86 — Ukagaka base ware is 32-bit)
+- CMake 3.20+, Ninja
+- `git submodule update --init --recursive` after clone
 
-### Configure and Build
+### Configure & Build
 ```bash
-# Configure (x86 build required for Ukagaka compatibility)
+# Configure (always x86)
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
-# Build all targets
+# Build everything
 cmake --build build --parallel
 
-# Build specific target
+# Build a single target
 cmake --build build --target quickshiori
-cmake --build build --target winrtmc_plugin
 cmake --build build --target ukadll
+cmake --build build --target ukafmo
+cmake --build build --target winrtmc
+cmake --build build --target winrtmc_plugin
 ```
 
-### Build Types
-- `Release` - Optimized build
-- `Debug` - Debug symbols
-- `RelWithDebInfo` - Release with debug info (recommended)
-
-### Clean Build
+### Clean Rebuild
 ```bash
 rm -rf build
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build --parallel
 ```
 
+### Build Types
+`RelWithDebInfo` (recommended) · `Release` · `Debug`
+
+## Testing
+
+No automated test framework. Tests are JS scripts run manually with the built `qjs.exe`:
+
+```bash
+# Run a module test (must run from repo root so module paths resolve)
+build/dist/qjs.exe module/ukafmo/test_ukafmo.js
+
+# Run the SQLite test
+build/dist/qjs.exe 3rd/qjs-ng-sqlite3/test.js
+```
+
+Integration testing is done by loading DLLs in SSP and verifying SHIORI protocol responses.
+
 ## Project Structure
 
 ```
-├── src/                    # Main SHIORI DLL source
-│   ├── quickshiori.cpp     # DLL entry points (load/loadu/request/unload)
-│   ├── quickshiori_module.* # QuickJS C module implementation
-│   └── quickshiori_log.h   # Logging utilities
-├── module/                 # Additional QuickJS modules
-│   ├── ukadll/             # Ukagaka DLL wrapper module
-│   └── winrtmc/            # WinRT MediaControl module
-├── WinRTMCPlugin/          # Self-contained SHIORI DLL with bytecode
-├── 3rd/                    # Third-party dependencies
-│   ├── quickjs/            # QuickJS-NG engine
-│   ├── qjs-ng-sqlite3/     # SQLite3 binding
-│   └── sqlite3-cmake/      # SQLite3 CMake wrapper
-├── types/                  # TypeScript type definitions
-└── build/dist/             # Build outputs (qjs.dll, quickshiori.dll, etc.)
+src/                    Main SHIORI runtime DLL (C++)
+  quickshiori.cpp       DLL entry points: load/loadu/request/unload
+  quickshiori_module.*  Built-in "quickshiori" QuickJS C module
+  quickshiori_log.h     Logging subsystem
+module/                 Native QuickJS modules (DLLs)
+  ukadll/               Ukagaka DLL wrapper (load foreign SHIORI/SAORI)
+  ukafmo/               FMO (shared memory) reader
+  winrtmc/              WinRT MediaSession control
+WinRTMCPlugin/          Self-contained SHIORI DLL with bytecode
+3rd/                    Third-party: quickjs-ng, qjs-ng-sqlite3, sqlite3
+types/                  TypeScript declarations for external use
+build/dist/             Output: qjs.exe, qjs.dll, *.dll, *.pdb
 ```
 
-## Code Style Guidelines
+## Code Style — C++
 
-### C++ Code Style
+### Naming
+| Element | Style | Example |
+|---|---|---|
+| Functions | `snake_case` | `cp_oemcp_to_utf8`, `collect_exception` |
+| Local variables | `snake_case` | `wlen`, `base_path` |
+| Global variables | `g_` prefix + `snake_case` | `g_rt`, `g_ctx`, `g_initialized` |
+| Structs / enum class | `PascalCase` | `FmoEntry`, `LogLevel` |
+| Constants | `UPPER_CASE` or `kCamelCase` | `CP_OEMCP` |
 
-#### Naming Conventions
-- **Functions**: `snake_case` (e.g., `cp_oemcp_to_utf8`, `collect_exception`)
-- **Variables**: `snake_case` (e.g., `g_rt`, `g_ctx`, `g_dir`)
-- **Global Variables**: prefix with `g_` (e.g., `g_log_level`, `g_initialized`)
-- **Classes/Structs**: `PascalCase` (e.g., `LogLevel` enum class)
-- **Constants**: `UPPER_CASE` or `kCamelCase`
-- **Files**: `snake_case.cpp/.h`
+### Formatting
+- 4 spaces, no tabs
+- K&R brace style (opening brace on same line)
+- LF line endings, UTF-8 with BOM via MSVC `/utf-8` flag
 
-#### Code Formatting
-- **Indentation**: 4 spaces (no tabs)
-- **Line endings**: LF (Unix-style)
-- **Encoding**: UTF-8 with BOM for MSVC compatibility (`/utf-8` flag)
-- **Brace style**: Same-line opening brace (K&R style)
+### Headers & Includes
+- Include guard: `#ifndef FILE_NAME_H` / `#define FILE_NAME_H`
+- Order: `<windows.h>` → C++ stdlib → 3rd party → local `""`
+- Every `.cpp`/`.h` must start with the BSD 3-clause license header (see existing files for the exact text)
 
-```cpp
-static std::string cp_oemcp_to_utf8(const char* src, int len) {
-    int wlen = MultiByteToWideChar(CP_OEMCP, 0, src, len, nullptr, 0);
-    // ...
-}
-```
-
-#### Standards
-- **C++ Standard**: C++17 for main project, C++20 for WinRTMCPlugin
-- **Target Platform**: Windows x86 (32-bit)
-- **Compiler**: MSVC with `/utf-8`, `/EHsc`, `/W3`
-
-#### Headers
-- All headers must include BSD 3-clause license
-- Use include guards: `#ifndef FILE_NAME_H`
-- Include order: Windows headers → C++ stdlib → 3rd party → local
-
-```cpp
-#ifndef QUICKSHIORI_LOG_H
-#define QUICKSHIORI_LOG_H
-
-#include <string>
-// ...
-
-#endif // QUICKSHIORI_LOG_H
-```
-
-### JavaScript/TypeScript Code Style
-
-#### Naming Conventions
-- **Variables**: `camelCase`
-- **Functions**: `camelCase`
-- **Classes**: `PascalCase`
-- **Constants**: `UPPER_CASE`
-
-#### Module System
-- Use ES modules (`import`/`export`)
-- TypeScript declarations in `.d.ts` files
-- Support both CommonJS and ES module imports
-
-```javascript
-export class KashiwazakiParser {
-    constructor(protocol) {
-        this.protocol = protocol;
-    }
-}
-```
-
-#### Comments
-- Use JSDoc for public APIs
-- Support both English and Chinese comments
+### Standards
+- C++17 for main project, C++20 for WinRTMCPlugin
+- MSVC flags: `/utf-8 /EHsc /W3`
+- `WIN32_LEAN_AND_MEAN`, `QUICKJS_NG_BUILD` compile definitions
 
 ### Error Handling
+- Return `std::pair<bool, std::string>` for fallible operations
+- Log via `log_error()` before returning; never silently swallow errors
+- RAII / manual cleanup on every error path (QuickJS values must be freed)
 
-#### C++
-- Use return values with `std::pair<bool, std::string>` for error propagation
-- Log errors via `log_error()` before returning
-- Clean up resources on error paths (RAII preferred)
+## Code Style — JavaScript / TypeScript
 
-```cpp
-static std::pair<bool, std::string> call_global(const char* name, const char* arg = nullptr) {
-    // ...
-    if (JS_IsException(ret)) {
-        return {false, collect_exception()};
-    }
-    return {true, result};
-}
-```
+### Naming
+| Element | Style |
+|---|---|
+| Variables, functions | `camelCase` |
+| Classes | `PascalCase` |
+| Constants | `UPPER_CASE` |
 
-#### JavaScript
-- Throw `Error` objects with descriptive messages
-- Validate inputs at function boundaries
+### Modules
+- ES module syntax (`import`/`export`)
+- Module DLLs are imported by their DLL name: `import { UkaDll } from "ukadll.dll"`
+- Built-in modules: `import { info, warn } from "quickshiori"`
 
-### Logging
+### TypeScript Declarations (`.d.ts`)
+- One `.d.ts` per module in its directory (e.g. `module/ukafmo/ukafmo.d.ts`)
+- Declare module with both plain name and `.dll` suffix:
+  ```ts
+  declare module 'ukafmo' { /* ... */ }
+  declare module 'ukafmo.dll' { export * from 'ukafmo'; }
+  ```
+- Use JSDoc with `@param`, `@returns`, `@example` for all public APIs
 
-Use the built-in logging system:
-
-```cpp
-log_debug("Runtime created");
-log_info("Initialization complete");
-log_warn("Deprecated API used");
-log_error("Failed to compile: " + err);
+### Global Hooks
+Every ghost's `index.js` must define three globals:
+```js
+globalThis.__shiori_load = function (dir) { /* init */ };
+globalThis.__shiori_request = function (rawRequest) { /* → response string */ };
+globalThis.__shiori_unload = function () { /* cleanup */ };
 ```
 
 ## CMake Guidelines
 
-### Target Properties
-- Set `CXX_STANDARD` per-target (17 or 20)
-- Use `target_compile_definitions` for Windows macros:
-  - `WIN32_LEAN_AND_MEAN`
-  - `QUICKJS_NG_BUILD`
-  - `NOMINMAX` (for WinRT)
-
-### Output Configuration
-- Runtime outputs go to `${CMAKE_BINARY_DIR}/dist`
-- DLL prefix is empty (Windows convention)
-- Suffix is `.dll`
-
-## Testing
-
-This project currently has no automated test suite. Testing is done via:
-1. Integration testing with Ukagaka base ware (SSP)
-2. Manual verification of DLL loading/unloading
-3. JavaScript entry point validation
+- `CXX_STANDARD` set per target (17 or 20)
+- Output to `${CMAKE_BINARY_DIR}/dist`, prefix `""`, suffix `.dll`
+- Module DLLs link only `qjs` (not `qjs-libc`); main `quickshiori` links both
+- All MSVC targets need `target_compile_options(... PRIVATE /utf-8)`
 
 ## CI/CD
 
-GitHub Actions workflows in `.github/workflows/`:
-- `ci-windows.yml` - Builds on Windows x86, uploads artifacts
-- `release-windows.yml` - Release builds with versioned artifacts
+GitHub Actions in `.github/workflows/`:
+- `ci-windows.yml` — build on push/PR, upload artifact zip
+- `release-windows.yml` — versioned release builds
 
-## Important Notes
+Both use `ilammy/msvc-dev-cmd@v1` with `arch: x86`.
 
-1. **Always use x86 architecture** - Ukagaka base ware is 32-bit
-2. **UTF-8 encoding** - Required for Chinese comments and Japanese text handling
-3. **Static linking** - WinRTMCPlugin is fully self-contained
-4. **Version management** - Update `CMakeLists.txt` project version for releases
-5. **Submodules** - Run `git submodule update --init --recursive` after clone
+## Key Constraints
 
-## License Headers
-
-All C++ files must include the BSD 3-clause license header:
-
-```cpp
-/*
- * Copyright (c) 2026 Cronfox
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms...
- */
-```
+1. **Always x86** — base ware loads 32-bit DLLs only
+2. **UTF-8 everywhere** — Chinese/Japanese text; MSVC `/utf-8` required
+3. **No Node.js** — QuickJS is the runtime; no npm, no Node APIs
+4. **Synchronous SHIORI** — `__shiori_request` must return a string, not a Promise
+5. **Submodules required** — `3rd/` contains vendored dependencies
