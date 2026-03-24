@@ -56,6 +56,8 @@ jobs:
             "build/dist/quickshiori.pdb",
             "build/dist/quickjs_sqlite3.dll",
             "build/dist/quickjs_sqlite3.pdb",
+            "build/dist/ukafmo.dll",
+            "build/dist/ukafmo.pdb",
             "build/dist/ukadll.dll",
             "build/dist/ukadll.pdb",
             "build/dist/winrtmc.dll",
