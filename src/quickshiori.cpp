@@ -90,6 +90,14 @@ LogLevel log_level_from_str(const char* s) {
     return LogLevel::INFO;
 }
 
+void DebugPrintUTF8(const char* utf8Str) {
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8Str, -1, NULL, 0);
+    wchar_t* wbuf = new wchar_t[wlen];
+    MultiByteToWideChar(CP_UTF8, 0, utf8Str, -1, wbuf, wlen);
+    OutputDebugStringW(wbuf);
+    delete[] wbuf;
+}
+
 // Core logging function.
 // Writes a timestamped, multi-line-aware entry to the debugger output and,
 // optionally, to <g_dir>/kashiwazaki.log.
@@ -97,11 +105,8 @@ void log_write(LogLevel lv, const std::string& msg) {
     if (lv < g_log_level) return;
 
     // Always mirror to the debugger output.
-    OutputDebugStringA("[QuickShiori][");
-    OutputDebugStringA(log_level_str(lv));
-    OutputDebugStringA("] ");
-    OutputDebugStringA(msg.c_str());
-    OutputDebugStringA("\n");
+    std::string dbg_msg = std::string("[QuickShiori][") + log_level_str(lv) + "] " + msg + "\n";
+    DebugPrintUTF8(dbg_msg.c_str());
 
     if (!g_log_to_file || g_dir.empty()) return;
 
